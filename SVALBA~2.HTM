@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Svalbarðsá — Salmon Catch Analysis</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+:root{color-scheme:light;
+ --bg:#f6f7f9;--card:#ffffff;--ink:#1b2430;--muted:#6b7785;--line:#e6e9ed;
+ --salmon:#e8714f;--salmon2:#f29e84;--teal:#1f8a8a;--navy:#2c3e63;--gold:#d6a13b;--green:#4f9d69;
+ --shadow:0 1px 3px rgba(20,30,45,.06),0 6px 18px rgba(20,30,45,.05);}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+ font-size:14px;line-height:1.5;padding:24px;}
+.wrap{max-width:1080px;margin:0 auto}
+header.hd{margin-bottom:20px}
+.kick{color:var(--salmon);font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:11.5px}
+h1{font-size:26px;margin:4px 0 4px;font-weight:750}
+.sub{color:var(--muted);font-size:13px;max-width:760px}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:20px 0}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:var(--shadow)}
+.kpi .lab{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.kpi .val{font-size:24px;font-weight:750;margin-top:4px}
+.kpi .note{font-size:11.5px;color:var(--muted);margin-top:2px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 18px 16px;box-shadow:var(--shadow);margin-bottom:18px}
+.card h2{font-size:16px;margin:0 0 2px}
+.card p.cap{color:var(--muted);font-size:12.5px;margin:0 0 12px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.seg{display:inline-flex;background:#eef1f4;border-radius:9px;padding:3px;gap:2px}
+.seg button{border:0;background:transparent;color:var(--muted);padding:6px 12px;border-radius:7px;font-size:12.5px;cursor:pointer;font-weight:600}
+.seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:#fff;border-radius:20px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--muted);user-select:none}
+.chip.on{color:#fff;border-color:transparent}
+.mini{font-size:12px;color:var(--muted);background:none;border:0;cursor:pointer;text-decoration:underline}
+.chartbox{position:relative;height:360px}
+.chartbox.tall{height:420px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+table.hm{border-collapse:collapse;font-size:11.5px;width:100%}
+table.hm th,table.hm td{border:1px solid #eef1f4;padding:4px 6px;text-align:center;white-space:nowrap}
+table.hm th{background:#f3f5f7;color:var(--muted);font-weight:600;position:sticky}
+table.hm td.yr{font-weight:700;background:#fafbfc;text-align:left}
+.hmwrap{overflow-x:auto}
+.legend-note{font-size:11.5px;color:var(--muted);margin-top:8px}
+.foot{color:var(--muted);font-size:11.5px;margin-top:8px;text-align:center}
+.tag{display:inline-block;background:#fdeee9;color:var(--salmon);border-radius:6px;padding:1px 7px;font-size:11px;font-weight:600}
+@media(max-width:860px){.kpis{grid-template-columns:repeat(2,1fr)}.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="hd">
+ <div class="kick">Þistilfjörður · Northeast Iceland</div>
+ <h1>Svalbarðsá — Salmon Catch Analysis</h1>
+ <div class="sub">Annual rod catch 2000–2025, weekly trends 2011–2025, and the <b>2026 season in progress</b>, with effort-adjusted catch assuming <b>3 rods every week</b>. A 37 km spring-fed (dragá) river flowing into Þistilfjörður; long-run mean (1974–2008) ~187 salmon. Source: Landssamband veiðifélaga (veiditolur.angling.is).</div>
+</header>
+
+<div class="kpis" id="kpis"></div>
+
+<div class="card" id="compareCard">
+ <h2>2026 season vs prior years <span class="tag" id="cmpTag"></span></h2>
+ <p class="cap">How this season is pacing against the same point in previous years — matched by reporting week, so it's like-for-like. Only weeks fished so far in 2026 count toward the "same point" figures.</p>
+ <div class="kpis" id="cmpKpis" style="margin:6px 0 14px"></div>
+ <div class="chartbox"><canvas id="compareChart"></canvas></div>
+ <div class="legend-note" id="cmpNote"></div>
+</div>
+
+<div class="card">
+ <h2>Annual catch, 2000–2025</h2>
+ <p class="cap">Total salmon landed per season (all 26 years). Dashed line = 26-year mean.</p>
+ <div class="chartbox"><canvas id="annualChart"></canvas></div>
+</div>
+
+<div class="card">
+ <h2>Weekly catch — year-on-year comparison</h2>
+ <p class="cap">Weekly landings aligned by calendar week (the river's run timing). Toggle the metric and pick which years to overlay. Weekly detail is available from 2011 onward.</p>
+ <div class="controls">
+   <div class="seg" id="metricSeg">
+     <button data-m="catch" class="on">Total catch</button>
+     <button data-m="per_rod_week">Per rod / week</button>
+     <button data-m="per_rod_halfweek">Per rod / half-week</button>
+   </div>
+   <button class="mini" id="recent5">Recent 5</button>
+   <button class="mini" id="allyears">All</button>
+   <button class="mini" id="clear">Clear</button>
+ </div>
+ <div class="chips" id="yearChips"></div>
+ <div class="controls" style="margin-top:8px">
+   <span style="font-size:12.5px;color:var(--muted)">Rolling averages:</span>
+   <span class="chip avgchip" data-n="3">3-yr avg</span>
+   <span class="chip avgchip" data-n="5">5-yr avg</span>
+   <span class="chip avgchip" data-n="10">10-yr avg</span>
+ </div>
+ <div class="chartbox tall" style="margin-top:12px"><canvas id="weeklyChart"></canvas></div>
+ <div class="legend-note">Shaded gold band = your 2026 fishing week (18–21 July). The river reports this in its week ending ~23–24 July, so it maps to that column. X-axis = average actual week-ending date for each reporting week. Y-axis is locked (max single-week value across all years) so lines stay comparable as you toggle years. Per-rod/week = weekly catch ÷ 3 rods; per-rod/half-week = ÷ 6 (3 rods × 2 half-weeks).</div>
+</div>
+
+<div class="card">
+ <h2>YTD catch — year-on-year comparison</h2>
+ <p class="cap">Cumulative year-to-date running total by reporting week. Uses the same metric, year selection and rolling-average toggles as the weekly chart above — shows how each season built up and where 2026 sits against them.</p>
+ <div class="chartbox tall"><canvas id="ytdChart"></canvas></div>
+ <div class="legend-note">Each line is the season's cumulative catch through that week (lines stop at each year's latest reported week). Driven by the metric / year / rolling-average buttons on the weekly chart above. Gold band = your 18–21 July week; Y-axis locked to the largest season total.</div>
+</div>
+
+<div class="card">
+   <h2>Average weekly profile</h2>
+   <p class="cap">Mean catch by calendar week — when the run peaks. Use the slider to average over only the most recent N years.</p>
+   <div class="controls">
+     <label for="yrSlider" style="font-size:12.5px;color:var(--muted)">Years averaged:</label>
+     <input type="range" id="yrSlider" min="1" max="15" value="15" style="width:240px;accent-color:var(--teal)">
+     <span id="yrSliderVal" class="tag" style="background:#e4f1f1;color:var(--teal)">all 15 yrs (2011–2025)</span>
+   </div>
+   <div class="chartbox"><canvas id="profileChart"></canvas></div>
+ </div>
+
+<div class="card">
+ <h2>Weekly catch heatmap</h2>
+ <p class="cap">Catch per calendar week. Darker = more fish. Pick the metric below.</p>
+ <div class="controls">
+   <div class="seg" id="hmMetricSeg">
+     <button data-m="catch" class="on">Total catch</button>
+     <button data-m="per_rod_week">Per rod / week</button>
+     <button data-m="per_rod_halfweek">Per rod / half-week</button>
+   </div>
+ </div>
+ <div class="hmwrap" id="heatmap"></div>
+ <div class="legend-note" id="hmNote"></div>
+</div>
+
+<div class="foot">Data from veiditolur.angling.is/veidisvaedi/svalbardsa, last updated 25 Sep 2026 (2026 season: 284 salmon through the week ending 23 Sep). Weekly totals reconcile exactly with published annual totals. Years 2000–2010 are published as season totals only (no weekly breakdown). Note: the river's official permit is 2 rods; per-rod figures here use the user's assumption of 3 rods for all weeks.</div>
+</div>
+
+<script>
+const DATA = {"annual": [{"year": 2026, "total": 284}, {"year": 2025, "total": 394}, {"year": 2024, "total": 429}, {"year": 2023, "total": 340}, {"year": 2022, "total": 381}, {"year": 2021, "total": 237}, {"year": 2020, "total": 208}, {"year": 2019, "total": 476}, {"year": 2018, "total": 337}, {"year": 2017, "total": 338}, {"year": 2016, "total": 368}, {"year": 2015, "total": 768}, {"year": 2014, "total": 403}, {"year": 2013, "total": 306}, {"year": 2012, "total": 274}, {"year": 2011, "total": 562}, {"year": 2010, "total": 504}, {"year": 2009, "total": 434}, {"year": 2008, "total": 320}, {"year": 2007, "total": 302}, {"year": 2006, "total": 283}, {"year": 2005, "total": 292}, {"year": 2004, "total": 231}, {"year": 2003, "total": 291}, {"year": 2002, "total": 236}, {"year": 2001, "total": 143}, {"year": 2000, "total": 92}], "weekly": {"2026": [{"date": "1. júlí", "iso": "2026-07-01", "isoweek": 27, "catch": 7, "per_rod_week": 2.33, "per_rod_halfweek": 1.17}, {"date": "8. júlí", "iso": "2026-07-08", "isoweek": 28, "catch": 25, "per_rod_week": 8.33, "per_rod_halfweek": 4.17}, {"date": "15. júlí", "iso": "2026-07-15", "isoweek": 29, "catch": 19, "per_rod_week": 6.33, "per_rod_halfweek": 3.17}, {"date": "22. júlí", "iso": "2026-07-22", "isoweek": 30, "catch": 31, "per_rod_week": 10.33, "per_rod_halfweek": 5.17}, {"date": "29. júlí", "iso": "2026-07-29", "isoweek": 31, "catch": 30, "per_rod_week": 10.0, "per_rod_halfweek": 5.0}, {"date": "5. ágúst", "iso": "2026-08-05", "isoweek": 32, "catch": 39, "per_rod_week": 13.0, "per_rod_halfweek": 6.5}, {"date": "12. ágúst", "iso": "2026-08-12", "isoweek": 33, "catch": 17, "per_rod_week": 5.67, "per_rod_halfweek": 2.83}, {"date": "19. ágúst", "iso": "2026-08-19", "isoweek": 34, "catch": 29, "per_rod_week": 9.67, "per_rod_halfweek": 4.83}, {"date": "26. ágúst", "iso": "2026-08-26", "isoweek": 35, "catch": 28, "per_rod_week": 9.33, "per_rod_halfweek": 4.67}, {"date": "2. sept.", "iso": "2026-09-02", "isoweek": 36, "catch": 13, "per_rod_week": 4.33, "per_rod_halfweek": 2.17}, {"date": "9. sept.", "iso": "2026-09-09", "isoweek": 37, "catch": 11, "per_rod_week": 3.67, "per_rod_halfweek": 1.83}, {"date": "16. sept.", "iso": "2026-09-16", "isoweek": 38, "catch": 28, "per_rod_week": 9.33, "per_rod_halfweek": 4.67}, {"date": "23. sept.", "iso": "2026-09-23", "isoweek": 39, "catch": 7, "per_rod_week": 2.33, "per_rod_halfweek": 1.17}], "2011": [{"date": "27. júlí", "iso": "2011-07-27", "isoweek": 30, "catch": 177, "per_rod_week": 59.0, "per_rod_halfweek": 29.5}, {"date": "4. ágúst", "iso": "2011-08-04", "isoweek": 31, "catch": 94, "per_rod_week": 31.33, "per_rod_halfweek": 15.67}, {"date": "17. ágúst", "iso": "2011-08-17", "isoweek": 33, "catch": 154, "per_rod_week": 51.33, "per_rod_halfweek": 25.67}, {"date": "24. ágúst", "iso": "2011-08-24", "isoweek": 34, "catch": 41, "per_rod_week": 13.67, "per_rod_halfweek": 6.83}, {"date": "30. sept.", "iso": "2011-09-30", "isoweek": 39, "catch": 96, "per_rod_week": 32.0, "per_rod_halfweek": 16.0}], "2012": [{"date": "18. júlí", "iso": "2012-07-18", "isoweek": 29, "catch": 94, "per_rod_week": 31.33, "per_rod_halfweek": 15.67}, {"date": "25. júlí", "iso": "2012-07-25", "isoweek": 30, "catch": 33, "per_rod_week": 11.0, "per_rod_halfweek": 5.5}, {"date": "1. ágúst", "iso": "2012-08-01", "isoweek": 31, "catch": 34, "per_rod_week": 11.33, "per_rod_halfweek": 5.67}, {"date": "8. ágúst", "iso": "2012-08-08", "isoweek": 32, "catch": 40, "per_rod_week": 13.33, "per_rod_halfweek": 6.67}, {"date": "22. ágúst", "iso": "2012-08-22", "isoweek": 34, "catch": 1, "per_rod_week": 0.33, "per_rod_halfweek": 0.17}, {"date": "29. ágúst", "iso": "2012-08-29", "isoweek": 35, "catch": 49, "per_rod_week": 16.33, "per_rod_halfweek": 8.17}, {"date": "19. sept.", "iso": "2012-09-19", "isoweek": 38, "catch": 23, "per_rod_week": 7.67, "per_rod_halfweek": 3.83}], "2013": [{"date": "3. júlí", "iso": "2013-07-03", "isoweek": 27, "catch": 7, "per_rod_week": 2.33, "per_rod_halfweek": 1.17}, {"date": "17. júlí", "iso": "2013-07-17", "isoweek": 29, "catch": 62, "per_rod_week": 20.67, "per_rod_halfweek": 10.33}, {"date": "31. júlí", "iso": "2013-07-31", "isoweek": 31, "catch": 75, "per_rod_week": 25.0, "per_rod_halfweek": 12.5}, {"date": "14. ágúst", "iso": "2013-08-14", "isoweek": 33, "catch": 85, "per_rod_week": 28.33, "per_rod_halfweek": 14.17}, {"date": "11. sept.", "iso": "2013-09-11", "isoweek": 37, "catch": 75, "per_rod_week": 25.0, "per_rod_halfweek": 12.5}, {"date": "25. sept.", "iso": "2013-09-25", "isoweek": 39, "catch": 2, "per_rod_week": 0.67, "per_rod_halfweek": 0.33}], "2014": [{"date": "9. júlí", "iso": "2014-07-09", "isoweek": 28, "catch": 33, "per_rod_week": 11.0, "per_rod_halfweek": 5.5}, {"date": "16. júlí", "iso": "2014-07-16", "isoweek": 29, "catch": 53, "per_rod_week": 17.67, "per_rod_halfweek": 8.83}, {"date": "23. júlí", "iso": "2014-07-23", "isoweek": 30, "catch": 62, "per_rod_week": 20.67, "per_rod_halfweek": 10.33}, {"date": "23. júlí", "iso": "2014-07-23", "isoweek": 30, "catch": 0, "per_rod_week": 0.0, "per_rod_halfweek": 0.0}, {"date": "30. júlí", "iso": "2014-07-30", "isoweek": 31, "catch": 46, "per_rod_week": 15.33, "per_rod_halfweek": 7.67}, {"date": "6. ágúst", "iso": "2014-08-06", "isoweek": 32, "catch": 57, "per_rod_week": 19.0, "per_rod_halfweek": 9.5}, {"date": "13. ágúst", "iso": "2014-08-13", "isoweek": 33, "catch": 23, "per_rod_week": 7.67, "per_rod_halfweek": 3.83}, {"date": "20. ágúst", "iso": "2014-08-20", "isoweek": 34, "catch": 41, "per_rod_week": 13.67, "per_rod_halfweek": 6.83}, {"date": "17. sept.", "iso": "2014-09-17", "isoweek": 38, "catch": 80, "per_rod_week": 26.67, "per_rod_halfweek": 13.33}, {"date": "24. sept.", "iso": "2014-09-24", "isoweek": 39, "catch": 8, "per_rod_week": 2.67, "per_rod_halfweek": 1.33}], "2015": [{"date": "29. júlí", "iso": "2015-07-29", "isoweek": 31, "catch": 234, "per_rod_week": 78.0, "per_rod_halfweek": 39.0}, {"date": "6. ágúst", "iso": "2015-08-06", "isoweek": 32, "catch": 112, "per_rod_week": 37.33, "per_rod_halfweek": 18.67}, {"date": "12. ágúst", "iso": "2015-08-12", "isoweek": 33, "catch": 121, "per_rod_week": 40.33, "per_rod_halfweek": 20.17}, {"date": "26. ágúst", "iso": "2015-08-26", "isoweek": 35, "catch": 135, "per_rod_week": 45.0, "per_rod_halfweek": 22.5}, {"date": "3. sept.", "iso": "2015-09-03", "isoweek": 36, "catch": 66, "per_rod_week": 22.0, "per_rod_halfweek": 11.0}, {"date": "16. sept.", "iso": "2015-09-16", "isoweek": 38, "catch": 74, "per_rod_week": 24.67, "per_rod_halfweek": 12.33}, {"date": "23. sept.", "iso": "2015-09-23", "isoweek": 39, "catch": 26, "per_rod_week": 8.67, "per_rod_halfweek": 4.33}], "2016": [{"date": "13. júlí", "iso": "2016-07-13", "isoweek": 28, "catch": 85, "per_rod_week": 28.33, "per_rod_halfweek": 14.17}, {"date": "27. júlí", "iso": "2016-07-27", "isoweek": 30, "catch": 76, "per_rod_week": 25.33, "per_rod_halfweek": 12.67}, {"date": "3. ágúst", "iso": "2016-08-03", "isoweek": 31, "catch": 56, "per_rod_week": 18.67, "per_rod_halfweek": 9.33}, {"date": "10. ágúst", "iso": "2016-08-10", "isoweek": 32, "catch": 42, "per_rod_week": 14.0, "per_rod_halfweek": 7.0}, {"date": "31. ágúst", "iso": "2016-08-31", "isoweek": 35, "catch": 59, "per_rod_week": 19.67, "per_rod_halfweek": 9.83}, {"date": "14. sept.", "iso": "2016-09-14", "isoweek": 37, "catch": 23, "per_rod_week": 7.67, "per_rod_halfweek": 3.83}, {"date": "30. sept.", "iso": "2016-09-30", "isoweek": 39, "catch": 27, "per_rod_week": 9.0, "per_rod_halfweek": 4.5}], "2017": [{"date": "5. júlí", "iso": "2017-07-05", "isoweek": 27, "catch": 24, "per_rod_week": 8.0, "per_rod_halfweek": 4.0}, {"date": "12. júlí", "iso": "2017-07-12", "isoweek": 28, "catch": 16, "per_rod_week": 5.33, "per_rod_halfweek": 2.67}, {"date": "19. júlí", "iso": "2017-07-19", "isoweek": 29, "catch": 32, "per_rod_week": 10.67, "per_rod_halfweek": 5.33}, {"date": "26. júlí", "iso": "2017-07-26", "isoweek": 30, "catch": 31, "per_rod_week": 10.33, "per_rod_halfweek": 5.17}, {"date": "2. ágúst", "iso": "2017-08-02", "isoweek": 31, "catch": 52, "per_rod_week": 17.33, "per_rod_halfweek": 8.67}, {"date": "9. ágúst", "iso": "2017-08-09", "isoweek": 32, "catch": 16, "per_rod_week": 5.33, "per_rod_halfweek": 2.67}, {"date": "16. ágúst", "iso": "2017-08-16", "isoweek": 33, "catch": 41, "per_rod_week": 13.67, "per_rod_halfweek": 6.83}, {"date": "23. ágúst", "iso": "2017-08-23", "isoweek": 34, "catch": 30, "per_rod_week": 10.0, "per_rod_halfweek": 5.0}, {"date": "30. ágúst", "iso": "2017-08-30", "isoweek": 35, "catch": 46, "per_rod_week": 15.33, "per_rod_halfweek": 7.67}, {"date": "6. sept.", "iso": "2017-09-06", "isoweek": 36, "catch": 17, "per_rod_week": 5.67, "per_rod_halfweek": 2.83}, {"date": "13. sept.", "iso": "2017-09-13", "isoweek": 37, "catch": 11, "per_rod_week": 3.67, "per_rod_halfweek": 1.83}, {"date": "20. sept.", "iso": "2017-09-20", "isoweek": 38, "catch": 13, "per_rod_week": 4.33, "per_rod_halfweek": 2.17}, {"date": "27. sept.", "iso": "2017-09-27", "isoweek": 39, "catch": 9, "per_rod_week": 3.0, "per_rod_halfweek": 1.5}], "2018": [{"date": "4. júlí", "iso": "2018-07-04", "isoweek": 27, "catch": 17, "per_rod_week": 5.67, "per_rod_halfweek": 2.83}, {"date": "18. júlí", "iso": "2018-07-18", "isoweek": 29, "catch": 55, "per_rod_week": 18.33, "per_rod_halfweek": 9.17}, {"date": "25. júlí", "iso": "2018-07-25", "isoweek": 30, "catch": 37, "per_rod_week": 12.33, "per_rod_halfweek": 6.17}, {"date": "1. ágúst", "iso": "2018-08-01", "isoweek": 31, "catch": 37, "per_rod_week": 12.33, "per_rod_halfweek": 6.17}, {"date": "8. ágúst", "iso": "2018-08-08", "isoweek": 32, "catch": 18, "per_rod_week": 6.0, "per_rod_halfweek": 3.0}, {"date": "15. ágúst", "iso": "2018-08-15", "isoweek": 33, "catch": 60, "per_rod_week": 20.0, "per_rod_halfweek": 10.0}, {"date": "22. ágúst", "iso": "2018-08-22", "isoweek": 34, "catch": 34, "per_rod_week": 11.33, "per_rod_halfweek": 5.67}, {"date": "5. sept.", "iso": "2018-09-05", "isoweek": 36, "catch": 66, "per_rod_week": 22.0, "per_rod_halfweek": 11.0}, {"date": "10. sept.", "iso": "2018-09-10", "isoweek": 37, "catch": 13, "per_rod_week": 4.33, "per_rod_halfweek": 2.17}], "2019": [{"date": "10. júlí", "iso": "2019-07-10", "isoweek": 28, "catch": 27, "per_rod_week": 9.0, "per_rod_halfweek": 4.5}, {"date": "17. júlí", "iso": "2019-07-17", "isoweek": 29, "catch": 59, "per_rod_week": 19.67, "per_rod_halfweek": 9.83}, {"date": "24. júlí", "iso": "2019-07-24", "isoweek": 30, "catch": 42, "per_rod_week": 14.0, "per_rod_halfweek": 7.0}, {"date": "31. júlí", "iso": "2019-07-31", "isoweek": 31, "catch": 47, "per_rod_week": 15.67, "per_rod_halfweek": 7.83}, {"date": "7. ágúst", "iso": "2019-08-07", "isoweek": 32, "catch": 48, "per_rod_week": 16.0, "per_rod_halfweek": 8.0}, {"date": "14. ágúst", "iso": "2019-08-14", "isoweek": 33, "catch": 69, "per_rod_week": 23.0, "per_rod_halfweek": 11.5}, {"date": "21. ágúst", "iso": "2019-08-21", "isoweek": 34, "catch": 60, "per_rod_week": 20.0, "per_rod_halfweek": 10.0}, {"date": "28. ágúst", "iso": "2019-08-28", "isoweek": 35, "catch": 29, "per_rod_week": 9.67, "per_rod_halfweek": 4.83}, {"date": "4. sept.", "iso": "2019-09-04", "isoweek": 36, "catch": 35, "per_rod_week": 11.67, "per_rod_halfweek": 5.83}, {"date": "11. sept.", "iso": "2019-09-11", "isoweek": 37, "catch": 42, "per_rod_week": 14.0, "per_rod_halfweek": 7.0}, {"date": "18. sept.", "iso": "2019-09-18", "isoweek": 38, "catch": 13, "per_rod_week": 4.33, "per_rod_halfweek": 2.17}, {"date": "25. sept.", "iso": "2019-09-25", "isoweek": 39, "catch": 5, "per_rod_week": 1.67, "per_rod_halfweek": 0.83}], "2020": [{"date": "1. júlí", "iso": "2020-07-01", "isoweek": 27, "catch": 35, "per_rod_week": 11.67, "per_rod_halfweek": 5.83}, {"date": "8. júlí", "iso": "2020-07-08", "isoweek": 28, "catch": 16, "per_rod_week": 5.33, "per_rod_halfweek": 2.67}, {"date": "15. júlí", "iso": "2020-07-15", "isoweek": 29, "catch": 35, "per_rod_week": 11.67, "per_rod_halfweek": 5.83}, {"date": "22. júlí", "iso": "2020-07-22", "isoweek": 30, "catch": 13, "per_rod_week": 4.33, "per_rod_halfweek": 2.17}, {"date": "29. júlí", "iso": "2020-07-29", "isoweek": 31, "catch": 49, "per_rod_week": 16.33, "per_rod_halfweek": 8.17}, {"date": "5. ágúst", "iso": "2020-08-05", "isoweek": 32, "catch": 60, "per_rod_week": 20.0, "per_rod_halfweek": 10.0}], "2021": [{"date": "30. júní", "iso": "2021-06-30", "isoweek": 26, "catch": 1, "per_rod_week": 0.33, "per_rod_halfweek": 0.17}, {"date": "7. júlí", "iso": "2021-07-07", "isoweek": 27, "catch": 23, "per_rod_week": 7.67, "per_rod_halfweek": 3.83}, {"date": "14. júlí", "iso": "2021-07-14", "isoweek": 28, "catch": 27, "per_rod_week": 9.0, "per_rod_halfweek": 4.5}, {"date": "21. júlí", "iso": "2021-07-21", "isoweek": 29, "catch": 13, "per_rod_week": 4.33, "per_rod_halfweek": 2.17}, {"date": "28. júlí", "iso": "2021-07-28", "isoweek": 30, "catch": 24, "per_rod_week": 8.0, "per_rod_halfweek": 4.0}, {"date": "4. ágúst", "iso": "2021-08-04", "isoweek": 31, "catch": 48, "per_rod_week": 16.0, "per_rod_halfweek": 8.0}, {"date": "11. ágúst", "iso": "2021-08-11", "isoweek": 32, "catch": 8, "per_rod_week": 2.67, "per_rod_halfweek": 1.33}, {"date": "18. ágúst", "iso": "2021-08-18", "isoweek": 33, "catch": 23, "per_rod_week": 7.67, "per_rod_halfweek": 3.83}, {"date": "25. ágúst", "iso": "2021-08-25", "isoweek": 34, "catch": 7, "per_rod_week": 2.33, "per_rod_halfweek": 1.17}, {"date": "1. sept.", "iso": "2021-09-01", "isoweek": 35, "catch": 14, "per_rod_week": 4.67, "per_rod_halfweek": 2.33}, {"date": "8. sept.", "iso": "2021-09-08", "isoweek": 36, "catch": 13, "per_rod_week": 4.33, "per_rod_halfweek": 2.17}, {"date": "15. sept.", "iso": "2021-09-15", "isoweek": 37, "catch": 16, "per_rod_week": 5.33, "per_rod_halfweek": 2.67}, {"date": "22. sept.", "iso": "2021-09-22", "isoweek": 38, "catch": 20, "per_rod_week": 6.67, "per_rod_halfweek": 3.33}, {"date": "22. sept.", "iso": "2021-09-22", "isoweek": 38, "catch": 0, "per_rod_week": 0.0, "per_rod_halfweek": 0.0}], "2022": [{"date": "13. júlí", "iso": "2022-07-13", "isoweek": 28, "catch": 44, "per_rod_week": 14.67, "per_rod_halfweek": 7.33}, {"date": "20. júlí", "iso": "2022-07-20", "isoweek": 29, "catch": 44, "per_rod_week": 14.67, "per_rod_halfweek": 7.33}, {"date": "27. júlí", "iso": "2022-07-27", "isoweek": 30, "catch": 26, "per_rod_week": 8.67, "per_rod_halfweek": 4.33}, {"date": "3. ágúst", "iso": "2022-08-03", "isoweek": 31, "catch": 52, "per_rod_week": 17.33, "per_rod_halfweek": 8.67}, {"date": "10. ágúst", "iso": "2022-08-10", "isoweek": 32, "catch": 58, "per_rod_week": 19.33, "per_rod_halfweek": 9.67}, {"date": "17. ágúst", "iso": "2022-08-17", "isoweek": 33, "catch": 46, "per_rod_week": 15.33, "per_rod_halfweek": 7.67}, {"date": "24. ágúst", "iso": "2022-08-24", "isoweek": 34, "catch": 47, "per_rod_week": 15.67, "per_rod_halfweek": 7.83}, {"date": "31. ágúst", "iso": "2022-08-31", "isoweek": 35, "catch": 15, "per_rod_week": 5.0, "per_rod_halfweek": 2.5}, {"date": "7. sept.", "iso": "2022-09-07", "isoweek": 36, "catch": 16, "per_rod_week": 5.33, "per_rod_halfweek": 2.67}, {"date": "14. sept.", "iso": "2022-09-14", "isoweek": 37, "catch": 17, "per_rod_week": 5.67, "per_rod_halfweek": 2.83}, {"date": "21. sept.", "iso": "2022-09-21", "isoweek": 38, "catch": 16, "per_rod_week": 5.33, "per_rod_halfweek": 2.67}], "2023": [{"date": "28. júní", "iso": "2023-06-28", "isoweek": 26, "catch": 5, "per_rod_week": 1.67, "per_rod_halfweek": 0.83}, {"date": "5. júlí", "iso": "2023-07-05", "isoweek": 27, "catch": 23, "per_rod_week": 7.67, "per_rod_halfweek": 3.83}, {"date": "12. júlí", "iso": "2023-07-12", "isoweek": 28, "catch": 16, "per_rod_week": 5.33, "per_rod_halfweek": 2.67}, {"date": "19. júlí", "iso": "2023-07-19", "isoweek": 29, "catch": 30, "per_rod_week": 10.0, "per_rod_halfweek": 5.0}, {"date": "26. júlí", "iso": "2023-07-26", "isoweek": 30, "catch": 33, "per_rod_week": 11.0, "per_rod_halfweek": 5.5}, {"date": "2. ágúst", "iso": "2023-08-02", "isoweek": 31, "catch": 69, "per_rod_week": 23.0, "per_rod_halfweek": 11.5}, {"date": "9. ágúst", "iso": "2023-08-09", "isoweek": 32, "catch": 38, "per_rod_week": 12.67, "per_rod_halfweek": 6.33}, {"date": "16. ágúst", "iso": "2023-08-16", "isoweek": 33, "catch": 9, "per_rod_week": 3.0, "per_rod_halfweek": 1.5}, {"date": "23. ágúst", "iso": "2023-08-23", "isoweek": 34, "catch": 29, "per_rod_week": 9.67, "per_rod_halfweek": 4.83}, {"date": "30. ágúst", "iso": "2023-08-30", "isoweek": 35, "catch": 12, "per_rod_week": 4.0, "per_rod_halfweek": 2.0}, {"date": "6. sept.", "iso": "2023-09-06", "isoweek": 36, "catch": 17, "per_rod_week": 5.67, "per_rod_halfweek": 2.83}, {"date": "13. sept.", "iso": "2023-09-13", "isoweek": 37, "catch": 30, "per_rod_week": 10.0, "per_rod_halfweek": 5.0}, {"date": "20. sept.", "iso": "2023-09-20", "isoweek": 38, "catch": 13, "per_rod_week": 4.33, "per_rod_halfweek": 2.17}, {"date": "27. sept.", "iso": "2023-09-27", "isoweek": 39, "catch": 16, "per_rod_week": 5.33, "per_rod_halfweek": 2.67}], "2024": [{"date": "10. júlí", "iso": "2024-07-10", "isoweek": 28, "catch": 16, "per_rod_week": 5.33, "per_rod_halfweek": 2.67}, {"date": "17. júlí", "iso": "2024-07-17", "isoweek": 29, "catch": 53, "per_rod_week": 17.67, "per_rod_halfweek": 8.83}, {"date": "24. júlí", "iso": "2024-07-24", "isoweek": 30, "catch": 97, "per_rod_week": 32.33, "per_rod_halfweek": 16.17}, {"date": "31. júlí", "iso": "2024-07-31", "isoweek": 31, "catch": 53, "per_rod_week": 17.67, "per_rod_halfweek": 8.83}, {"date": "7. ágúst", "iso": "2024-08-07", "isoweek": 32, "catch": 57, "per_rod_week": 19.0, "per_rod_halfweek": 9.5}, {"date": "14. ágúst", "iso": "2024-08-14", "isoweek": 33, "catch": 32, "per_rod_week": 10.67, "per_rod_halfweek": 5.33}, {"date": "21. ágúst", "iso": "2024-08-21", "isoweek": 34, "catch": 27, "per_rod_week": 9.0, "per_rod_halfweek": 4.5}, {"date": "28. ágúst", "iso": "2024-08-28", "isoweek": 35, "catch": 11, "per_rod_week": 3.67, "per_rod_halfweek": 1.83}, {"date": "4. sept.", "iso": "2024-09-04", "isoweek": 36, "catch": 26, "per_rod_week": 8.67, "per_rod_halfweek": 4.33}, {"date": "11. sept.", "iso": "2024-09-11", "isoweek": 37, "catch": 30, "per_rod_week": 10.0, "per_rod_halfweek": 5.0}, {"date": "18. sept.", "iso": "2024-09-18", "isoweek": 38, "catch": 9, "per_rod_week": 3.0, "per_rod_halfweek": 1.5}, {"date": "25. sept.", "iso": "2024-09-25", "isoweek": 39, "catch": 7, "per_rod_week": 2.33, "per_rod_halfweek": 1.17}, {"date": "2. okt.", "iso": "2024-10-02", "isoweek": 40, "catch": 11, "per_rod_week": 3.67, "per_rod_halfweek": 1.83}], "2025": [{"date": "2. júlí", "iso": "2025-07-02", "isoweek": 27, "catch": 14, "per_rod_week": 4.67, "per_rod_halfweek": 2.33}, {"date": "9. júlí", "iso": "2025-07-09", "isoweek": 28, "catch": 42, "per_rod_week": 14.0, "per_rod_halfweek": 7.0}, {"date": "16. júlí", "iso": "2025-07-16", "isoweek": 29, "catch": 23, "per_rod_week": 7.67, "per_rod_halfweek": 3.83}, {"date": "23. júlí", "iso": "2025-07-23", "isoweek": 30, "catch": 66, "per_rod_week": 22.0, "per_rod_halfweek": 11.0}, {"date": "30. júlí", "iso": "2025-07-30", "isoweek": 31, "catch": 19, "per_rod_week": 6.33, "per_rod_halfweek": 3.17}, {"date": "6. ágúst", "iso": "2025-08-06", "isoweek": 32, "catch": 48, "per_rod_week": 16.0, "per_rod_halfweek": 8.0}, {"date": "13. ágúst", "iso": "2025-08-13", "isoweek": 33, "catch": 60, "per_rod_week": 20.0, "per_rod_halfweek": 10.0}, {"date": "20. ágúst", "iso": "2025-08-20", "isoweek": 34, "catch": 23, "per_rod_week": 7.67, "per_rod_halfweek": 3.83}, {"date": "27. ágúst", "iso": "2025-08-27", "isoweek": 35, "catch": 24, "per_rod_week": 8.0, "per_rod_halfweek": 4.0}, {"date": "3. sept.", "iso": "2025-09-03", "isoweek": 36, "catch": 26, "per_rod_week": 8.67, "per_rod_halfweek": 4.33}, {"date": "10. sept.", "iso": "2025-09-10", "isoweek": 37, "catch": 11, "per_rod_week": 3.67, "per_rod_halfweek": 1.83}, {"date": "17. sept.", "iso": "2025-09-17", "isoweek": 38, "catch": 7, "per_rod_week": 2.33, "per_rod_halfweek": 1.17}, {"date": "24. sept.", "iso": "2025-09-24", "isoweek": 39, "catch": 8, "per_rod_week": 2.67, "per_rod_halfweek": 1.33}, {"date": "1. okt.", "iso": "2025-10-01", "isoweek": 40, "catch": 23, "per_rod_week": 7.67, "per_rod_halfweek": 3.83}]}, "isoweeks": [26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40], "detail_years": [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026], "season_index": {"2011": {"1": 177, "2": 94, "3": 154, "4": 41, "5": 96}, "2012": {"1": 94, "2": 33, "3": 34, "4": 40, "5": 1, "6": 49, "7": 23}, "2013": {"1": 7, "2": 62, "3": 75, "4": 85, "5": 75, "6": 2}, "2014": {"1": 33, "2": 53, "3": 62, "4": 0, "5": 46, "6": 57, "7": 23, "8": 41, "9": 80, "10": 8}, "2015": {"1": 234, "2": 112, "3": 121, "4": 135, "5": 66, "6": 74, "7": 26}, "2016": {"1": 85, "2": 76, "3": 56, "4": 42, "5": 59, "6": 23, "7": 27}, "2017": {"1": 24, "2": 16, "3": 32, "4": 31, "5": 52, "6": 16, "7": 41, "8": 30, "9": 46, "10": 17, "11": 11, "12": 13, "13": 9}, "2018": {"1": 17, "2": 55, "3": 37, "4": 37, "5": 18, "6": 60, "7": 34, "8": 66, "9": 13}, "2019": {"1": 27, "2": 59, "3": 42, "4": 47, "5": 48, "6": 69, "7": 60, "8": 29, "9": 35, "10": 42, "11": 13, "12": 5}, "2020": {"1": 35, "2": 16, "3": 35, "4": 13, "5": 49, "6": 60}, "2021": {"1": 1, "2": 23, "3": 27, "4": 13, "5": 24, "6": 48, "7": 8, "8": 23, "9": 7, "10": 14, "11": 13, "12": 16, "13": 20, "14": 0}, "2022": {"1": 44, "2": 44, "3": 26, "4": 52, "5": 58, "6": 46, "7": 47, "8": 15, "9": 16, "10": 17, "11": 16}, "2023": {"1": 5, "2": 23, "3": 16, "4": 30, "5": 33, "6": 69, "7": 38, "8": 9, "9": 29, "10": 12, "11": 17, "12": 30, "13": 13, "14": 16}, "2024": {"1": 16, "2": 53, "3": 97, "4": 53, "5": 57, "6": 32, "7": 27, "8": 11, "9": 26, "10": 30, "11": 9, "12": 7, "13": 11}, "2025": {"1": 14, "2": 42, "3": 23, "4": 66, "5": 19, "6": 48, "7": 60, "8": 23, "9": 24, "10": 26, "11": 11, "12": 7, "13": 8, "14": 23}}};
+const RODKEY={catch:'catch',per_rod_week:'per_rod_week',per_rod_halfweek:'per_rod_halfweek'};
+const PAL=['#e8714f','#1f8a8a','#2c3e63','#d6a13b','#4f9d69','#9b5fb0','#c0504d','#3a7bd5','#e7a33e','#5c6f7e','#7aab57','#b5651d','#2a9d8f','#bb4430','#6d6875'];
+const isoweeks=DATA.isoweeks;
+// label each iso week by the AVERAGE actual week-ending date observed in the data (across years)
+function weekEndingLabel(w){
+  let sum=0,n=0;
+  DATA.detail_years.forEach(y=>{(DATA.weekly[String(y)]||[]).forEach(r=>{ if(r.isoweek===w){
+    const dt=new Date(r.iso+'T00:00:00Z');
+    const doy=Math.round((Date.UTC(dt.getUTCFullYear(),dt.getUTCMonth(),dt.getUTCDate())-Date.UTC(dt.getUTCFullYear(),0,1))/86400000);
+    sum+=doy; n++;
+  }});});
+  let doy;
+  if(n){ doy=Math.round(sum/n); }
+  else { // fallback: Sunday of ISO week in a 2025 frame
+    const s=new Date(Date.UTC(2025,0,1+(w-1)*7)); const dow=s.getUTCDay()||7;
+    const mon=new Date(s); mon.setUTCDate(s.getUTCDate()-dow+1); const sun=new Date(mon); sun.setUTCDate(mon.getUTCDate()+6);
+    doy=Math.round((sun-Date.UTC(2025,0,1))/86400000);
+  }
+  const d=new Date(Date.UTC(2025,0,1+doy));
+  return d.toLocaleDateString('en-GB',{day:'numeric',month:'short',timeZone:'UTC'});
+}
+const weekLabels=isoweeks.map(weekEndingLabel);
+
+// build per-year iso-week -> value maps (summing duplicate weeks)
+function yearWeekMap(year,metric){
+  const m={};
+  (DATA.weekly[year]||[]).forEach(r=>{m[r.isoweek]=(m[r.isoweek]||0)+r[metric];});
+  return m;
+}
+const detailYears=DATA.detail_years.map(String);
+// current (partial) season vs complete historical seasons
+const CURRENT_YEAR=Math.max(...DATA.detail_years);          // 2026
+const PRIOR_YEAR=CURRENT_YEAR-1;                            // 2025
+const baselineYears=detailYears.filter(y=>+y<CURRENT_YEAR); // complete seasons only
+
+// ---------- KPIs ----------
+(function(){
+  const ann=DATA.annual.filter(a=>a.year<CURRENT_YEAR); // complete seasons only
+  const byYear={}; ann.forEach(a=>byYear[a.year]=a.total);
+  const totals=ann.map(a=>a.total);
+  const mean=(totals.reduce((s,x)=>s+x,0)/totals.length);
+  const peak=ann.reduce((p,a)=>a.total>p.total?a:p);
+  const low=ann.reduce((p,a)=>a.total<p.total?a:p);
+  const last5=[2025,2024,2023,2022,2021].map(y=>byYear[y]);
+  const avg5=last5.reduce((s,x)=>s+x,0)/5;
+  const yoy=((byYear[2025]-byYear[2024])/byYear[2024]*100);
+  const cards=[
+    ['2025 total',byYear[2025],'salmon landed'],
+    ['26-yr mean',Math.round(mean),'2000–2025'],
+    ['Record year',peak.total,peak.year+' (peak)'],
+    ['Last 5-yr avg',Math.round(avg5),'2021–2025'],
+    ['2025 vs 2024',(yoy>=0?'+':'')+yoy.toFixed(0)+'%',byYear[2025]+' vs '+byYear[2024]],
+  ];
+  document.getElementById('kpis').innerHTML=cards.map(c=>
+    `<div class="kpi"><div class="lab">${c[0]}</div><div class="val">${c[1]}</div><div class="note">${c[2]}</div></div>`).join('');
+})();
+
+// ---------- Annual chart ----------
+(function(){
+  const ann=DATA.annual.filter(a=>a.year<CURRENT_YEAR).sort((a,b)=>a.year-b.year); // exclude partial current season
+  const mean=ann.reduce((s,a)=>s+a.total,0)/ann.length;
+  new Chart(document.getElementById('annualChart'),{
+    type:'bar',
+    data:{labels:ann.map(a=>a.year),datasets:[
+      {label:'Annual catch',data:ann.map(a=>a.total),backgroundColor:ann.map(a=>a.year>=2011?'#e8714f':'#f3b6a3'),borderRadius:4},
+      {type:'line',label:'26-yr mean ('+Math.round(mean)+')',data:ann.map(()=>mean),borderColor:'#2c3e63',borderDash:[6,5],borderWidth:1.5,pointRadius:0,fill:false}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}},
+        tooltip:{callbacks:{afterBody:i=>i[0].dataIndex!=null?'':''}}},
+      scales:{y:{beginAtZero:true,title:{display:true,text:'Salmon'}},x:{ticks:{font:{size:10},maxRotation:90,minRotation:90}}}}
+  });
+})();
+
+// ---------- Weekly comparison ----------
+let metric='catch';
+let hmMetric='catch';
+let profileYears=15;
+let selectedYears=['2026','2025','2024','2023','2022'];
+let avgToggles={3:false,5:false,10:false};
+let weeklyChart,profileChart,compareChart,ytdChart;
+
+function buildChips(){
+  const c=document.getElementById('yearChips');
+  c.innerHTML=detailYears.slice().reverse().map((y,i)=>{
+    const idx=detailYears.indexOf(y);
+    const col=PAL[idx%PAL.length];
+    const on=selectedYears.includes(y);
+    return `<span class="chip ${on?'on':''}" data-y="${y}" style="${on?`background:${col};`:''}">${y}</span>`;
+  }).join('');
+  c.querySelectorAll('.chip').forEach(el=>el.onclick=()=>{
+    const y=el.dataset.y;
+    if(selectedYears.includes(y))selectedYears=selectedYears.filter(x=>x!==y);
+    else selectedYears.push(y);
+    buildChips();render();
+  });
+}
+function colorFor(y){return y===String(CURRENT_YEAR)?'#111827':PAL[detailYears.indexOf(y)%PAL.length];}
+
+function datasetsWeekly(cumulative){
+  return selectedYears.sort((a,b)=>a-b).map(y=>{
+    const m=yearWeekMap(y,metric);
+    let run=0;
+    const data=isoweeks.map(w=>{
+      if(!(w in m))return cumulative?run:null;
+      run+=m[w];
+      return cumulative?run:m[w];
+    });
+    return {label:y+(y===String(CURRENT_YEAR)?' (this year)':''),data,borderColor:colorFor(y),backgroundColor:colorFor(y),
+      borderWidth:y===String(CURRENT_YEAR)?3.2:1.6,pointRadius:y===String(CURRENT_YEAR)?4:2,tension:.3,spanGaps:true};
+  });
+}
+const yTitle={catch:'Salmon per week',per_rod_week:'Catch per rod per week',per_rod_halfweek:'Catch per rod per half-week'};
+
+// mean catch per calendar week over the most recent n years, in the current metric
+function avgSeries(n){
+  const yrs=[...baselineYears].sort((a,b)=>b-a).slice(0,n);
+  const sums={},cnts={};
+  yrs.forEach(y=>{const m=yearWeekMap(String(y),metric);isoweeks.forEach(w=>{if(w in m){sums[w]=(sums[w]||0)+m[w];cnts[w]=(cnts[w]||0)+1;}});});
+  return isoweeks.map(w=>cnts[w]?+(sums[w]/cnts[w]).toFixed(2):null);
+}
+const AVGDEFS=[[3,'#2c3e63'],[5,'#d6a13b'],[10,'#9b5fb0']];
+
+// fixed y-axis max per metric (max single-week value across ALL years) so the axis
+// stays locked while toggling years/averages
+function lockedYMax(m){
+  let mx=0; DATA.detail_years.forEach(y=>{(DATA.weekly[String(y)]||[]).forEach(r=>{ if(r[m]>mx)mx=r[m]; });});
+  const step = mx>200?50 : mx>100?25 : mx>40?10 : 5;
+  return Math.ceil(mx/step)*step;
+}
+// cumulative (YTD) axis lock: largest full-season total in the metric
+function lockedYMaxCum(m){
+  let mx=0; DATA.detail_years.forEach(y=>{ let s=0;(DATA.weekly[String(y)]||[]).forEach(r=>s+=r[m]); if(s>mx)mx=s; });
+  const step = mx>400?100 : mx>200?50 : mx>100?25 : 10;
+  return Math.ceil(mx/step)*step;
+}
+// cumulative datasets for selected years — line stops at each year's latest reported week
+function cumDatasets(){
+  return [...selectedYears].sort((a,b)=>a-b).map(y=>{
+    const m=yearWeekMap(y,metric);
+    const present=isoweeks.filter(w=>w in m);
+    const firstW=present[0], lastW=present[present.length-1];
+    let run=0;
+    const data=isoweeks.map(w=>{ if(w in m) run+=m[w]; return (present.length && w>=firstW && w<=lastW)?run:null; });
+    return {label:y+(y===String(CURRENT_YEAR)?' (this year)':''),data,borderColor:colorFor(y),backgroundColor:colorFor(y),
+      borderWidth:y===String(CURRENT_YEAR)?3.2:1.6,pointRadius:y===String(CURRENT_YEAR)?4:2,tension:.3,spanGaps:true};
+  });
+}
+
+// Shade our 2026 fishing week (18-21 July = calendar week ending 20 Jul, ISO week 30)
+const OUR_WEEK=30;
+const shadeWeekPlugin={
+  id:'shadeWeek',
+  beforeDatasetsDraw(chart){
+    const idx=isoweeks.indexOf(OUR_WEEK);
+    if(idx<0)return;
+    const x=chart.scales.x, area=chart.chartArea, ctx=chart.ctx;
+    if(!x||!area)return;
+    const center=x.getPixelForTick(idx);
+    const next=idx<isoweeks.length-1?x.getPixelForTick(idx+1):center+(center-x.getPixelForTick(idx-1));
+    const prev=idx>0?x.getPixelForTick(idx-1):center-(next-center);
+    const left=(prev+center)/2, right=(center+next)/2;
+    ctx.save();
+    ctx.fillStyle='rgba(214,161,59,0.20)';
+    ctx.fillRect(left,area.top,right-left,area.bottom-area.top);
+    ctx.strokeStyle='rgba(184,128,30,0.7)';ctx.setLineDash([4,3]);ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(left,area.top);ctx.lineTo(left,area.bottom);
+    ctx.moveTo(right,area.top);ctx.lineTo(right,area.bottom);ctx.stroke();
+    ctx.setLineDash([]);ctx.fillStyle='#9a6c12';
+    ctx.font='600 11px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.textAlign='center';
+    ctx.fillText('Our week · 18–21 Jul',(left+right)/2,area.top+13);
+    ctx.restore();
+  }
+};
+
+function render(){
+  const ds=datasetsWeekly(false);
+  AVGDEFS.forEach(([n,c])=>{ if(avgToggles[n]) ds.push({label:n+'-yr avg',data:avgSeries(n),
+    borderColor:c,backgroundColor:c,borderWidth:2.6,borderDash:[7,4],pointRadius:0,tension:.3,spanGaps:true}); });
+  if(weeklyChart)weeklyChart.destroy();
+  weeklyChart=new Chart(document.getElementById('weeklyChart'),{
+    type:'line',data:{labels:weekLabels,datasets:ds},
+    plugins:[shadeWeekPlugin],
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false},
+      plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}}},
+      scales:{y:{beginAtZero:true,max:lockedYMax(metric),title:{display:true,text:yTitle[metric]}},
+        x:{title:{display:true,text:'Week ending'},ticks:{font:{size:10}}}}}
+  });
+
+  // ---- YTD (cumulative) chart, same controls ----
+  const dsc=cumDatasets();
+  AVGDEFS.forEach(([n,c])=>{ if(avgToggles[n]){
+    const per=avgSeries(n); let run=0;
+    const cum=per.map(v=>{ if(v==null) return null; run+=v; return +run.toFixed(1); });
+    dsc.push({label:n+'-yr avg',data:cum,borderColor:c,backgroundColor:c,borderWidth:2.6,borderDash:[7,4],pointRadius:0,tension:.3,spanGaps:true});
+  }});
+  if(ytdChart)ytdChart.destroy();
+  ytdChart=new Chart(document.getElementById('ytdChart'),{
+    type:'line',data:{labels:weekLabels,datasets:dsc},
+    plugins:[shadeWeekPlugin],
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false},
+      plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}}},
+      scales:{y:{beginAtZero:true,max:lockedYMaxCum(metric),title:{display:true,text:'Cumulative '+yTitle[metric]}},
+        x:{title:{display:true,text:'Week ending'},ticks:{font:{size:10}}}}}
+  });
+}
+
+// metric segmented control
+document.querySelectorAll('#metricSeg button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#metricSeg button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');metric=b.dataset.m;render();
+});
+document.getElementById('recent5').onclick=()=>{selectedYears=['2026','2025','2024','2023','2022'];buildChips();render();};
+document.getElementById('allyears').onclick=()=>{selectedYears=[...detailYears];buildChips();render();};
+document.getElementById('clear').onclick=()=>{selectedYears=[];buildChips();render();};
+
+// rolling-average toggles on the weekly chart
+const AVGCOL={3:'#2c3e63',5:'#d6a13b',10:'#9b5fb0'};
+document.querySelectorAll('.avgchip').forEach(el=>el.onclick=()=>{
+  const n=+el.dataset.n; avgToggles[n]=!avgToggles[n];
+  if(avgToggles[n]){el.classList.add('on');el.style.background=AVGCOL[n];}
+  else{el.classList.remove('on');el.style.background='';}
+  render();
+});
+
+// ---------- Average weekly profile (slider-driven) ----------
+function renderProfile(){
+  const yrs=[...baselineYears].sort((a,b)=>b-a).slice(0,profileYears); // most recent N complete seasons
+  const sums={},cnts={};
+  yrs.forEach(y=>{const m=yearWeekMap(String(y),'catch');isoweeks.forEach(w=>{if(w in m){sums[w]=(sums[w]||0)+m[w];cnts[w]=(cnts[w]||0)+1;}});});
+  const avg=isoweeks.map(w=>cnts[w]?+(sums[w]/cnts[w]).toFixed(1):0);
+  if(profileChart)profileChart.destroy();
+  profileChart=new Chart(document.getElementById('profileChart'),{
+    type:'bar',data:{labels:weekLabels,datasets:[{label:'Mean weekly catch',data:avg,backgroundColor:'#1f8a8a',borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:true,title:{display:true,text:'Mean salmon / week'}},x:{ticks:{font:{size:10}}}}}
+  });
+}
+const yrSlider=document.getElementById('yrSlider');
+yrSlider.oninput=()=>{
+  profileYears=+yrSlider.value;
+  const yrs=[...detailYears].sort((a,b)=>b-a).slice(0,profileYears);
+  const lo=Math.min(...yrs), hi=Math.max(...yrs);
+  document.getElementById('yrSliderVal').textContent=
+    profileYears===detailYears.length?`all ${profileYears} yrs (${lo}–${hi})`:`last ${profileYears} yr${profileYears>1?'s':''} (${lo}–${hi})`;
+  renderProfile();
+};
+
+// ---------- Heatmap ----------
+function buildHeatmap(){
+  const years=[...detailYears].sort((a,b)=>b-a);
+  let max=0;const maps={};
+  years.forEach(y=>{maps[y]=yearWeekMap(String(y),hmMetric);Object.values(maps[y]).forEach(v=>{if(v>max)max=v;});});
+  function cell(v){
+    if(v==null)return '<td style="background:#fafbfc;color:#ccc">·</td>';
+    const t=max?v/max:0;
+    const bg=`rgba(232,113,79,${(0.08+t*0.92).toFixed(3)})`;
+    const col=t>0.55?'#fff':'#1b2430';
+    const disp=hmMetric==='catch'?Math.round(v):v.toFixed(1);
+    return `<td style="background:${bg};color:${col}">${disp}</td>`;
+  }
+  let html='<table class="hm"><thead><tr><th>Year</th>'+weekLabels.map((l,i)=>`<th>${l}</th>`).join('')+'<th>Total</th></tr></thead><tbody>';
+  years.forEach(y=>{
+    const m=maps[y];let tot=0;
+    html+=`<tr><td class="yr">${y}</td>`+isoweeks.map(w=>{const v=(w in m)?m[w]:null;if(v!=null)tot+=v;return cell(v);}).join('');
+    const tdisp=hmMetric==='catch'?Math.round(tot):tot.toFixed(1);
+    html+=`<td style="font-weight:700">${tdisp}</td></tr>`;
+  });
+  html+='</tbody></table>';
+  document.getElementById('heatmap').innerHTML=html;
+  document.getElementById('hmNote').textContent='Showing: '+yTitle[hmMetric]+'. Blank (·) = no fishing recorded that week.';
+}
+document.querySelectorAll('#hmMetricSeg button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#hmMetricSeg button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');hmMetric=b.dataset.m;buildHeatmap();
+});
+
+// ---------- Current season vs prior years ----------
+function seasonToDate(year,weeks){const m=yearWeekMap(String(year),'catch');return weeks.reduce((s,w)=>s+(m[w]||0),0);}
+function renderCompare(){
+  const cy=String(CURRENT_YEAR);
+  const cyMap=yearWeekMap(cy,'catch');
+  const weeksElapsed=isoweeks.filter(w=>w in cyMap);
+  const cyTotal=weeksElapsed.reduce((s,w)=>s+cyMap[w],0);
+  const lastN=[...baselineYears].sort((a,b)=>b-a).slice(0,5);
+  const priorSame=seasonToDate(PRIOR_YEAR,weeksElapsed);
+  const avgSame=Math.round(lastN.reduce((s,y)=>s+seasonToDate(y,weeksElapsed),0)/lastN.length);
+  const lastWk=weeksElapsed.length?weeksElapsed[weeksElapsed.length-1]:null;
+  const pct=(a,b)=>b?((a-b)/b*100):0;
+  const fmtPct=v=>(v>=0?'+':'')+v.toFixed(0)+'%';
+  const cards=[
+    ['2026 to date',cyTotal,weeksElapsed.length+' week'+(weeksElapsed.length!==1?'s':'')+' fished'],
+    ['Same point '+PRIOR_YEAR,priorSame,'2026 '+fmtPct(pct(cyTotal,priorSame))],
+    ['Same point 5-yr avg',avgSame,'2026 '+fmtPct(pct(cyTotal,avgSame))],
+    ['Latest week',lastWk?cyMap[lastWk]:0,lastWk?('ending '+weekLabels[isoweeks.indexOf(lastWk)]):'—'],
+  ];
+  document.getElementById('cmpKpis').innerHTML=cards.map(c=>`<div class="kpi"><div class="lab">${c[0]}</div><div class="val">${c[1]}</div><div class="note">${c[2]}</div></div>`).join('');
+  document.getElementById('cmpTag').textContent=lastWk?('through '+weekLabels[isoweeks.indexOf(lastWk)]):'season not started';
+  function cumline(year){const m=yearWeekMap(String(year),'catch');let run=0;return isoweeks.map(w=>{if(!(w in m))return null;run+=m[w];return run;});}
+  const avgPer=isoweeks.map(w=>{let s=0,c=0;lastN.forEach(y=>{const m=yearWeekMap(String(y),'catch');if(w in m){s+=m[w];c++;}});return c?s/c:0;});
+  let arun=0;const avgCum=avgPer.map(v=>{arun+=v;return +arun.toFixed(1);});
+  if(compareChart)compareChart.destroy();
+  compareChart=new Chart(document.getElementById('compareChart'),{
+    type:'line',
+    data:{labels:weekLabels,datasets:[
+      {label:CURRENT_YEAR+' (this year)',data:cumline(cy),borderColor:'#111827',backgroundColor:'#111827',borderWidth:3.2,pointRadius:4,tension:.3,spanGaps:false},
+      {label:PRIOR_YEAR+' (last year)',data:cumline(PRIOR_YEAR),borderColor:'#e8714f',backgroundColor:'#e8714f',borderWidth:2,pointRadius:2,tension:.3,spanGaps:true},
+      {label:'5-yr avg ('+lastN[lastN.length-1]+'–'+lastN[0]+')',data:avgCum,borderColor:'#d6a13b',backgroundColor:'#d6a13b',borderWidth:2,borderDash:[7,4],pointRadius:0,tension:.3},
+    ]},
+    plugins:[shadeWeekPlugin],
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false},
+      plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}}},
+      scales:{y:{beginAtZero:true,title:{display:true,text:'Cumulative salmon'}},
+        x:{title:{display:true,text:'Week ending'},ticks:{font:{size:10}}}}}
+  });
+  document.getElementById('cmpNote').textContent='Cumulative running total by reporting week. Black = '+CURRENT_YEAR+' so far; orange = '+PRIOR_YEAR+'; dashed gold = average of the last 5 seasons. "Same point" sums only weeks fished so far in '+CURRENT_YEAR+'. Shaded band = your 18–21 July week.';
+}
+
+buildChips();render();renderProfile();buildHeatmap();renderCompare();
+</script>
+</body>
+</html>
